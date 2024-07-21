@@ -17,11 +17,12 @@ from utils.args import FitArgs, save_args
 from utils import Renderer
 from utils.forward import batch_to_device, calc_losses, LOSS_KEYS, KP_LOSSES, idx_batch
 from utils.pytorch3d import export_mesh
+from dump_keypoint_norm import dump_norm, dump_keypoints
 
 Stage = namedtuple('Stage', 'name num_epochs lr params losses')
 DEFAULT_STAGES = [
-	Stage('Registration', 50, .001, ['reg'], ['kp_nll']),
-	Stage('Deform verts', 250, .001, ['deform', 'reg'], ['kp_nll', 'sil', 'norm_nll']),
+	Stage('Registration', 200, .001, ['reg'], ['kp_nll']),
+	Stage('Deform verts', 450, .001, ['deform', 'reg'], ['kp_nll', 'sil', 'norm_nll']),
 ]
 
 
@@ -29,7 +30,7 @@ def visualize_view(batch, res, GT_mesh_data=None, norm_err=None):
 	"""Visualize a reconstruction view given GT data, predicted data, and optionally GT_mesh data.
 	Each must be in a dictionary of the data for just that view"""
 	pred_kps_np = res['kps'].cpu().detach().numpy()
-
+	
 	gt_norm_vis =  batch['norm_rgb'] * batch['sil'].unsqueeze(-1) #  only consider norm RGB within silhouette for visualisation purposes
 	pred_norm_vis = res['norm_rgb'] * res['sil'].unsqueeze(-1)
 
@@ -50,6 +51,9 @@ def main(args):
 	device = args.device
 	exp_dir = os.path.join('exp', args.exp_name)
 	os.makedirs(exp_dir, exist_ok=True)
+    
+    #dump_norm(args.rgb_folder)
+    #dump_keypoints(args.rgb_folder)
 
 
 	folder_names = dict(rgb=args.rgb_folder, norm=args.norm_folder, norm_unc=args.norm_unc_folder)
@@ -87,12 +91,11 @@ def main(args):
 
 		if len([l for l in stage.losses if l in KP_LOSSES]) > 1:
 			raise ValueError("Only one form of keypoint loss per stage is supported.")
-
+		
 		stage_loss_log = defaultdict(lambda: defaultdict(list))
 
 		render_normals = 'norm_nll' in stage.losses or 'norm_al' in stage.losses
 		render_sil = 'sil' in stage.losses or render_normals
-
 		with tqdm(range(stage.num_epochs), bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}') as tqdm_it:
 			for epoch in tqdm_it:
 				optimiser.zero_grad()
@@ -105,7 +108,7 @@ def main(args):
 
 				for nbatch, batch in enumerate(data_loader):
 					batch = batch_to_device(batch, device)
-
+					
 					batch['sil'] = (batch['norm_alpha'] < args.alpha_threshold).float() # create silhouette from uncertainty map
 
 					new_mesh = model()  # get Meshes prediction
@@ -115,7 +118,6 @@ def main(args):
 								   render_sil=render_sil or is_vis,
 								   keypoints=model.kps_from_mesh(new_mesh),
 								   mask_out_faces=model.get_mask_out_faces())  # render the mesh
-
 					res['new_mesh'] = new_mesh
 
 					loss_dict = calc_losses(res, batch, stage.losses, {'img_size': args.targ_img_size})
@@ -188,5 +190,4 @@ def main(args):
 if __name__ == '__main__':
 	parser = FitArgs()
 	args = parser.parse()
-
 	main(args)

@@ -16,7 +16,7 @@ class FitArgs(argparse.ArgumentParser):
 
 		# DATA PARAMS
 		self.add_argument('--data_folder', type=str, default='test_imgs/foot')
-		self.add_argument('--targ_img_size', default=(192, 144), type=tuple, help='(H, W) - Resize images to this size.')
+		self.add_argument('--targ_img_size', default=(640, 480), type=tuple, help='(H, W) - Resize images to this size.')
 		self.add_argument('--include_gt_mesh', action='store_true', help="Use GT mesh while validating."
 																		"Note: must be in data_folder, as mesh.obj")
 
